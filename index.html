@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jewellery Retail Pro - Updated</title>
+    <title>Jewellery Retail Pro</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -13,36 +13,34 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     
     <style>
-        /* --- STYLES --- */
-        :root { --primary: #0f172a; --secondary: #334155; --accent: #d97706; --silver: #64748b; --success: #15803d; --danger: #b91c1c; --bg: #f1f5f9; --card-bg: #ffffff; --border: #e2e8f0; }
-        body { font-family: 'Inter', sans-serif; background: var(--bg); margin: 0; padding: 0; color: var(--secondary); }
-        
-        /* LOGIN SCREEN STYLES */
+        /* --- LOGIN SCREEN STYLES (New) --- */
         #login-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100vh;
             background: #0f172a; display: flex; flex-direction: column;
-            align-items: center; justify-content: center; z-index: 9999;
+            align-items: center; justify-content: center; z-index: 99999;
         }
         .login-box {
-            background: white; padding: 30px; border-radius: 12px;
+            background: white; padding: 40px; border-radius: 12px;
             width: 300px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
         }
-        .login-box h2 { margin-top: 0; color: #0f172a; margin-bottom: 20px; }
         .login-input {
-            width: 100%; padding: 12px; margin-bottom: 15px; border: 2px solid #e2e8f0;
-            border-radius: 6px; box-sizing: border-box; font-size: 16px; text-align: center;
+            width: 100%; padding: 14px; margin-bottom: 20px; border: 2px solid #e2e8f0;
+            border-radius: 8px; box-sizing: border-box; font-size: 16px; text-align: center;
         }
         .login-btn {
-            width: 100%; padding: 12px; background: #0f172a; color: white;
-            border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px;
+            width: 100%; padding: 14px; background: #0f172a; color: white;
+            border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 16px;
         }
         .login-btn:hover { background: #334155; }
-        .error-msg { color: #dc2626; font-size: 13px; margin-top: 10px; min-height: 20px; }
+        .error-msg { color: #dc2626; font-size: 13px; margin-top: 15px; min-height: 20px; }
 
-        /* APP CONTENT HIDDEN BY DEFAULT */
-        #app-content { display: none; padding-top: 70px; }
+        /* --- APP CONTENT (Hidden by default) --- */
+        #app-content { display: none; }
 
-        /* EXISTING STYLES */
+        /* --- EXISTING STYLES (Unchanged) --- */
+        :root { --primary: #0f172a; --secondary: #334155; --accent: #d97706; --silver: #64748b; --success: #15803d; --danger: #b91c1c; --bg: #f1f5f9; --card-bg: #ffffff; --border: #e2e8f0; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); margin: 0; padding: 0; color: var(--secondary); padding-top: 70px; }
+        
         .navbar { position: fixed; top: 0; left: 0; width: 100%; height: 65px; background: var(--card-bg); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; box-sizing: border-box; z-index: 1000; }
         .nav-logo { font-size: 20px; font-weight: 700; color: var(--primary); }
         .live-clock { font-size: 14px; font-weight: 600; color: var(--accent); background: #fffbeb; padding: 5px 12px; border-radius: 20px; border: 1px solid #fcd34d; }
@@ -130,8 +128,8 @@
 
     <div id="login-screen">
         <div class="login-box">
-            <h2>🔐 Login</h2>
-            <input type="password" id="loginCode" class="login-input" placeholder="Enter Login Code">
+            <h2 style="color:#0f172a; margin-top:0;">🔐 Start Session</h2>
+            <input type="password" id="loginCodeInput" class="login-input" placeholder="Enter Login Code">
             <button class="login-btn" onclick="attemptLogin()">Start Now</button>
             <div id="loginError" class="error-msg"></div>
         </div>
@@ -148,7 +146,7 @@
                     <button onclick="switchView('history')">📊 History</button>
                     <button onclick="switchView('settings')">⚙️ Settings</button>
                     <button onclick="resetForm()" style="color:red;">✨ Clear Form</button>
-                    <button onclick="handleLogout()" style="color:var(--primary); font-weight:bold; border-top:2px solid #eee;">🔒 Logout</button>
+                    <button onclick="handleLogout()" style="color:var(--primary); border-top:2px solid #eee; font-weight:bold;">🔓 Logout</button>
                 </div>
             </div>
         </nav>
@@ -320,7 +318,7 @@
     </div>
 
     <script>
-        // --- FIREBASE SETUP ---
+        // --- 1. FIREBASE & BACKEND CONFIGURATION ---
         const firebaseConfig = {
           apiKey: "AIzaSyBGSHNh0FOrBlOyDwJni2AZpD_K7FXGNkM",
           authDomain: "billifypro-27f44.firebaseapp.com",
@@ -331,113 +329,135 @@
           appId: "1:696017086920:web:adec654d609c9f748078fd"
         };
         
-        firebase.initializeApp(firebaseConfig);
+        // Init Firebase
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
         const db = firebase.database();
 
-        // --- LOGIN & SESSION LOGIC ---
+        // --- 2. LOGIN SYSTEM LOGIC ---
+
+        // Helper: Get or Create Unique Device ID
         function getDeviceId() {
-            let id = localStorage.getItem('unique_device_id');
+            let id = localStorage.getItem('device_session_id');
             if(!id) {
-                id = 'dev_' + Date.now() + Math.random().toString(36).substr(2, 9);
-                localStorage.setItem('unique_device_id', id);
+                // Generate a random string for device ID
+                id = 'dev_' + Math.random().toString(36).substr(2, 9) + Date.now();
+                localStorage.setItem('device_session_id', id);
             }
             return id;
         }
 
         async function attemptLogin() {
-            const code = document.getElementById('loginCode').value.trim();
+            const code = document.getElementById('loginCodeInput').value.trim();
             const errDiv = document.getElementById('loginError');
             errDiv.innerText = '';
-            
-            if (!code) { errDiv.innerText = "Please enter a code."; return; }
+
+            if(!code) { errDiv.innerText = "Please enter login code."; return; }
 
             try {
-                const ref = db.ref('login_sessions/' + code);
-                const snapshot = await ref.get();
-                const deviceId = getDeviceId();
-                
-                if (code === "ASC") { // Specific rule for code ASC
-                    let session = snapshot.exists() ? snapshot.val() : null;
+                // Check if the code is allowed (in DB)
+                // Note: For first run, if DB is empty, we allow 'ASC' to initialize it.
+                const validRef = db.ref('allowed_codes/' + code);
+                const snapshot = await validRef.get();
 
-                    if (!session || !session.isActive) {
-                        // Success: First login
-                        await ref.set({
-                            isActive: true,
-                            deviceId: deviceId,
-                            lastLogin: new Date().toISOString()
-                        });
-                        completeLogin(code);
-                    } else {
-                        // Already active: Check device ID
-                        if (session.deviceId === deviceId) {
-                            completeLogin(code); // Same device re-logging
-                        } else {
-                            errDiv.innerText = "🚫 Access Denied: Already logged in on another device.";
-                        }
-                    }
-                } else {
-                    // Strictly check Firebase for other codes (or block if only ASC is allowed)
-                    if (snapshot.exists()) {
-                         // Similar logic can be applied for other codes if needed
-                         errDiv.innerText = "Invalid Login Code.";
-                    } else {
-                         errDiv.innerText = "Invalid Login Code.";
-                    }
+                // Strict check: Code must exist in DB OR be 'ASC' (to bootstrap first use)
+                let isValid = snapshot.exists() && snapshot.val() === true;
+                
+                // BOOTSTRAP: If code is ASC and not in DB yet, create it.
+                if(code === 'ASC' && !snapshot.exists()) {
+                    await db.ref('allowed_codes/ASC').set(true);
+                    isValid = true;
                 }
+
+                if (!isValid) {
+                    errDiv.innerText = "Invalid Login Code.";
+                    return;
+                }
+
+                // Code is Valid. Create a session for THIS device.
+                const deviceId = getDeviceId();
+                const sessionRef = db.ref('active_sessions/' + code + '/' + deviceId);
+                
+                await sessionRef.set({
+                    connected: true,
+                    loginTime: new Date().toISOString(),
+                    userAgent: navigator.userAgent
+                });
+
+                // Save Local Session
+                localStorage.setItem('logged_in_code', code);
+                
+                // Grant Access
+                showApp();
+
             } catch (error) {
-                console.error(error);
-                errDiv.innerText = "Connection Error. Try again.";
+                console.error("Login Error:", error);
+                errDiv.innerText = "Connection Failed. Check Internet.";
             }
         }
 
-        function completeLogin(code) {
-            localStorage.setItem('session_code', code);
-            document.getElementById('login-screen').style.display = 'none';
-            document.getElementById('app-content').style.display = 'block';
-            initialize(); // Start the main app
-        }
+        async function checkAutoLogin() {
+            const savedCode = localStorage.getItem('logged_in_code');
+            const deviceId = getDeviceId();
 
-        async function checkSession() {
-            const savedCode = localStorage.getItem('session_code');
             if (savedCode) {
-                const ref = db.ref('login_sessions/' + savedCode);
-                const snapshot = await ref.get();
-                const deviceId = getDeviceId();
-                
-                if (snapshot.exists()) {
-                    const session = snapshot.val();
-                    if (session.isActive && session.deviceId === deviceId) {
-                        // Auto-login success
-                        document.getElementById('login-screen').style.display = 'none';
-                        document.getElementById('app-content').style.display = 'block';
-                        initialize();
-                        return;
+                // Verify this specific session still exists in Firebase
+                const sessionRef = db.ref('active_sessions/' + savedCode + '/' + deviceId);
+                try {
+                    const snapshot = await sessionRef.get();
+                    if (snapshot.exists()) {
+                        showApp();
+                    } else {
+                        // Session was removed remotely or invalid
+                        localStorage.removeItem('logged_in_code');
+                        showLogin();
                     }
+                } catch(e) {
+                    // Offline fallback: if we have a code, let them in, 
+                    // or strictly force login? Requirement says "Checked from Firebase".
+                    // If offline, we can't check. For safety, stay on login or allow?
+                    // Safe approach: If offline, show login error.
+                    showLogin();
                 }
-                // If invalid session found
-                localStorage.removeItem('session_code');
+            } else {
+                showLogin();
             }
         }
 
         async function handleLogout() {
-            const code = localStorage.getItem('session_code');
-            if(code) {
-                await db.ref('login_sessions/' + code).update({
-                    isActive: false,
-                    deviceId: null
-                });
-                localStorage.removeItem('session_code');
-                location.reload(); // Reset to login screen
+            const savedCode = localStorage.getItem('logged_in_code');
+            const deviceId = getDeviceId();
+            
+            if(savedCode && deviceId) {
+                // Remove ONLY this device's session from Firebase
+                await db.ref('active_sessions/' + savedCode + '/' + deviceId).remove();
             }
+            
+            // Clear Local Storage
+            localStorage.removeItem('logged_in_code');
+            
+            // Reload to reset state
+            location.reload();
         }
 
-        // --- APP INITIALIZATION (MODIFIED) ---
-        // Run checkSession on load instead of straight initialize
+        function showApp() {
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('app-content').style.display = 'block';
+            initialize(); // Start the actual app logic
+        }
+
+        function showLogin() {
+            document.getElementById('login-screen').style.display = 'flex';
+            document.getElementById('app-content').style.display = 'none';
+        }
+
+        // --- 3. EXISTING APP LOGIC (UNCHANGED) ---
+        
         window.onload = function() {
-            checkSession();
+            checkAutoLogin(); // Run login check first
         };
 
-        // --- ORIGINAL APP LOGIC (UNCHANGED EXCEPT init trigger) ---
         function initialize() {
             setInterval(() => {
                 const now = new Date();
