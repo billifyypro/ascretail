@@ -335,13 +335,11 @@
         }
         const db = firebase.database();
 
-        // --- 2. LOGIN SYSTEM LOGIC ---
+        // --- 2. LOGIN & SYNC SYSTEM LOGIC ---
 
-        // Helper: Get or Create Unique Device ID
         function getDeviceId() {
             let id = localStorage.getItem('device_session_id');
             if(!id) {
-                // Generate a random string for device ID
                 id = 'dev_' + Math.random().toString(36).substr(2, 9) + Date.now();
                 localStorage.setItem('device_session_id', id);
             }
@@ -356,15 +354,12 @@
             if(!code) { errDiv.innerText = "Please enter login code."; return; }
 
             try {
-                // Check if the code is allowed (in DB)
-                // Note: For first run, if DB is empty, we allow 'ASC' to initialize it.
+                // Check if the code is allowed
                 const validRef = db.ref('allowed_codes/' + code);
                 const snapshot = await validRef.get();
 
-                // Strict check: Code must exist in DB OR be 'ASC' (to bootstrap first use)
                 let isValid = snapshot.exists() && snapshot.val() === true;
                 
-                // BOOTSTRAP: If code is ASC and not in DB yet, create it.
                 if(code === 'ASC' && !snapshot.exists()) {
                     await db.ref('allowed_codes/ASC').set(true);
                     isValid = true;
@@ -375,7 +370,7 @@
                     return;
                 }
 
-                // Code is Valid. Create a session for THIS device.
+                // Register active session
                 const deviceId = getDeviceId();
                 const sessionRef = db.ref('active_sessions/' + code + '/' + deviceId);
                 
@@ -388,7 +383,7 @@
                 // Save Local Session
                 localStorage.setItem('logged_in_code', code);
                 
-                // Grant Access
+                // Grant Access & Start Sync
                 showApp();
 
             } catch (error) {
@@ -402,22 +397,16 @@
             const deviceId = getDeviceId();
 
             if (savedCode) {
-                // Verify this specific session still exists in Firebase
                 const sessionRef = db.ref('active_sessions/' + savedCode + '/' + deviceId);
                 try {
                     const snapshot = await sessionRef.get();
                     if (snapshot.exists()) {
                         showApp();
                     } else {
-                        // Session was removed remotely or invalid
                         localStorage.removeItem('logged_in_code');
                         showLogin();
                     }
                 } catch(e) {
-                    // Offline fallback: if we have a code, let them in, 
-                    // or strictly force login? Requirement says "Checked from Firebase".
-                    // If offline, we can't check. For safety, stay on login or allow?
-                    // Safe approach: If offline, show login error.
                     showLogin();
                 }
             } else {
@@ -430,21 +419,20 @@
             const deviceId = getDeviceId();
             
             if(savedCode && deviceId) {
-                // Remove ONLY this device's session from Firebase
+                // Detach listeners before removing
+                db.ref('users/' + savedCode).off();
                 await db.ref('active_sessions/' + savedCode + '/' + deviceId).remove();
             }
             
-            // Clear Local Storage
             localStorage.removeItem('logged_in_code');
-            
-            // Reload to reset state
             location.reload();
         }
 
         function showApp() {
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('app-content').style.display = 'block';
-            initialize(); // Start the actual app logic
+            startDataSync(); // <--- START DATA SYNC HERE
+            initialize();
         }
 
         function showLogin() {
@@ -452,10 +440,48 @@
             document.getElementById('app-content').style.display = 'none';
         }
 
-        // --- 3. EXISTING APP LOGIC (UNCHANGED) ---
+        // --- NEW: REAL-TIME DATA SYNC LOGIC ---
+        function startDataSync() {
+            const code = localStorage.getItem('logged_in_code');
+            if(!code) return;
+
+            const userRef = db.ref('users/' + code);
+
+            // 1. Sync Settings: Cloud -> Local
+            userRef.child('settings').on('value', (snapshot) => {
+                const s = snapshot.val();
+                if(s) {
+                    localStorage.setItem('jewelleryShopName', s.name || '');
+                    localStorage.setItem('jewelleryShopAddr', s.addr || '');
+                    
+                    // Update UI if fields are empty or different
+                    const nInput = document.getElementById('shopName');
+                    const aInput = document.getElementById('shopAddr');
+                    if(nInput) nInput.value = s.name || '';
+                    if(aInput) aInput.value = s.addr || '';
+                }
+            });
+
+            // 2. Sync Bills: Cloud -> Local
+            userRef.child('bills').on('value', (snapshot) => {
+                const b = snapshot.val();
+                if(b) {
+                    // Firebase might return object if keys are integers, force Array or store as is
+                    // JSON.stringify handles both objects and arrays fine for localStorage
+                    localStorage.setItem('jewelleryBills', JSON.stringify(b));
+                    
+                    // If we are on History view, refresh list
+                    if(document.getElementById('view-history').classList.contains('active')) {
+                        loadSavedBills();
+                    }
+                }
+            });
+        }
+
+        // --- 3. EXISTING APP LOGIC ---
         
         window.onload = function() {
-            checkAutoLogin(); // Run login check first
+            checkAutoLogin();
         };
 
         function initialize() {
@@ -479,9 +505,23 @@
         }
 
         function saveSettings() {
-            localStorage.setItem('jewelleryShopName', document.getElementById('shopName').value);
-            localStorage.setItem('jewelleryShopAddr', document.getElementById('shopAddr').value);
-            alert("Settings Saved!"); switchView('home');
+            const name = document.getElementById('shopName').value;
+            const addr = document.getElementById('shopAddr').value;
+            
+            // Local Save
+            localStorage.setItem('jewelleryShopName', name);
+            localStorage.setItem('jewelleryShopAddr', addr);
+
+            // Cloud Save
+            const code = localStorage.getItem('logged_in_code');
+            if(code) {
+                db.ref('users/' + code + '/settings').set({
+                    name: name,
+                    addr: addr
+                });
+            }
+
+            alert("Settings Saved & Synced!"); switchView('home');
         }
 
         function toggleKaccha() {
@@ -635,13 +675,24 @@
             const data = getBillData();
             if(!data.cust) { alert("Enter Customer Name!"); return; }
 
+            // 1. Save Locally
+            let bills = [];
             try {
-                let bills = JSON.parse(localStorage.getItem('jewelleryBills') || '[]');
+                bills = JSON.parse(localStorage.getItem('jewelleryBills') || '[]');
                 bills.unshift(data);
                 localStorage.setItem('jewelleryBills', JSON.stringify(bills));
                 loadSavedBills(); 
             } catch(e) {
                 alert("History Save Error: " + e.message); return;
+            }
+
+            // 2. Sync to Cloud
+            const code = localStorage.getItem('logged_in_code');
+            if(code) {
+                // We overwrite the entire bills node with the updated array
+                // to ensure total sync.
+                db.ref('users/' + code + '/bills').set(bills)
+                .catch(err => console.error("Cloud Sync Error", err));
             }
 
             try {
@@ -713,7 +764,10 @@
 
         function loadSavedBills(query = '') {
             try {
-                const bills = JSON.parse(localStorage.getItem('jewelleryBills') || '[]');
+                // Ensure bills is always an array
+                let bills = JSON.parse(localStorage.getItem('jewelleryBills') || '[]');
+                if(!Array.isArray(bills)) bills = Object.values(bills);
+
                 const list = document.getElementById('billsList');
                 list.innerHTML = '';
                 const filtered = bills.filter(b => (b.cust||'').toLowerCase().includes(query.toLowerCase()) || (b.inv||'').toLowerCase().includes(query.toLowerCase()));
@@ -737,14 +791,24 @@
         function deleteBill(id) {
             if(confirm("Delete this bill?")) {
                 let bills = JSON.parse(localStorage.getItem('jewelleryBills') || '[]');
+                if(!Array.isArray(bills)) bills = Object.values(bills);
+                
                 bills = bills.filter(b => b.id != id);
                 localStorage.setItem('jewelleryBills', JSON.stringify(bills));
                 loadSavedBills(document.getElementById('searchName').value);
+
+                // Cloud Sync
+                const code = localStorage.getItem('logged_in_code');
+                if(code) {
+                    db.ref('users/' + code + '/bills').set(bills);
+                }
             }
         }
 
         function editBill(id) {
-            const bills = JSON.parse(localStorage.getItem('jewelleryBills') || '[]');
+            let bills = JSON.parse(localStorage.getItem('jewelleryBills') || '[]');
+            if(!Array.isArray(bills)) bills = Object.values(bills);
+
             const bill = bills.find(b => b.id == id);
             if(bill && confirm("Edit this bill?")) {
                 document.getElementById('invoiceNo').value = bill.inv;
